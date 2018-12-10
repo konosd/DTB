@@ -1,7 +1,7 @@
 import os
 
 # #########
-# Initializer
+# Initializer woohoooo
 # #########
 
 data_dir = os.path.join(os.getcwd(),'data')
