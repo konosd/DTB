@@ -12,6 +12,7 @@ import pandas as pd
 # #####################
 
 # Reading the DTC and keeping only relevant information
+data_dir = os.path.join(os.getcwd(),'data')
 dtc_path = os.path.join(data_dir, 'DTC_data.csv')
 
 def dtc_parser(file = dtc_path):
@@ -20,7 +21,7 @@ def dtc_parser(file = dtc_path):
 	dtc_db = dtc_db.dropna()
 	dtc_db = dtc_db[dtc_db.standard_type == 'KD']
 	return(dtc_db)
-	
+
 dtc_db = dtc_parser(dtc_path)
 
 # Tidy data
@@ -51,7 +52,6 @@ dtc_db = dtc_db.loc[dtc_db.index, ['compound_id','target_id','standard_value']]
 
 print('DTC database cleaned and ready, with {} compounds'.format(dtc_db.shape[0]))
 print(dtc_db.head())
-print('Querrying compound isomerical SMILES and kinases aminoacid sequences')
+print('Ready to query compound isomerical SMILES and kinases aminoacid sequences')
 
 # creating resource object
-
