@@ -50,8 +50,12 @@ dtc_db = dtc_db[dtc_db.standard_units == 'NM']
 # Now only keep vital information
 dtc_db = dtc_db.loc[dtc_db.index, ['compound_id','target_id','standard_value']]
 
+# And finally remove duplicate rows, aggregating by median
+dtc_db = dtc_db.groupby(['compound_id','target_id'])['standard_value'].median()
+dtc_db = dtc_db.reset_index()
+
 print('DTC database cleaned and ready, with {} compounds'.format(dtc_db.shape[0]))
 print(dtc_db.head())
 print('Ready to query compound isomerical SMILES and kinases aminoacid sequences')
 
-# creating resource object
+dtc_db.to_csv('data/dtc_db.csv') #from 2GB to 1.7 MB bitches
