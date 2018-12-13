@@ -1,8 +1,4 @@
-import gevent.monkey
-gevent.monkey.patch_all()
-
 import numpy as np
-from chembl_webresource_client import *
 import os
 import pandas as pd
 # #####################
