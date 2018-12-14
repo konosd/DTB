@@ -150,19 +150,19 @@ p = {'lr': 0.001,
      'dense_size': int(1024),
      'dense_size2': 512,
      'dropout': 0.1,
-     'l2reg': 0.00}
+     'l2reg': 0.015}
 
 
-lr_value = 0.001
+lr_value = 0.0003
 all_scores = []
-windows_smiles = [32,48]
-windows_seq = [32,48]
+windows_smiles = [48]
+windows_seq = [48]
 for i in range(len(windows_smiles)):
 	for j in range(len(windows_seq)):
 		interactionModel = dtb_model(p,lr_value,windows_smiles[i],windows_seq[j])
 		tensorboard = keras.callbacks.TensorBoard(log_dir='/artifacts', histogram_freq=0,
           write_graph=True, write_images=True)
-		interactionModel.fit([XD,XT],Y, batch_size = 128 , epochs = 20, callbacks=[tensorboard])
+		interactionModel.fit([XD,XT],Y, batch_size = 256 , epochs = 40, callbacks=[tensorboard], validation_split = 0.2)
 		scores = interactionModel.evaluate([XD,XT], Y, verbose=0)
 		all_scores.append(scores[1])
 
