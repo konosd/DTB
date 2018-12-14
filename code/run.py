@@ -146,7 +146,7 @@ p = {'lr': 0.001,
 
 lr_value = 0.001
 all_scores = []
-windows_smiles = [32,48]
+windows_smiles = [32,48,64]
 windows_seq = [32,48]
 for i in range(len(windows_smiles)):
 	for j in range(len(windows_seq)):
