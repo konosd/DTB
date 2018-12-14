@@ -76,7 +76,17 @@ def label_sequence(protein, max_prot_len = 1000, prot_dict = dict_prot):
     for i,ch in enumerate(protein[:max_prot_len]):
         X[i] = prot_dict[ch]
 
+def get_cindex(y_true, y_pred):
+    g = tf.subtract(tf.expand_dims(y_pred, -1), y_pred)
+    g = tf.cast(g == 0.0, tf.float32) * 0.5 + tf.cast(g > 0.0, tf.float32)
 
+    f = tf.subtract(tf.expand_dims(y_true, -1), y_true) > 0.0
+    f = tf.matrix_band_part(tf.cast(f, tf.float32), -1, 0)
+
+    g = tf.reduce_sum(tf.multiply(g, f))
+    f = tf.reduce_sum(f)
+
+    return tf.where(tf.equal(g, 0), 0.0, g/f)
 
 def dtb_model(params,lr_value, windows_smiles, windows_seq):
     XDinput = keras.layers.Input(shape = (100,dict_smiles_len))
@@ -110,10 +120,9 @@ def dtb_model(params,lr_value, windows_smiles, windows_seq):
     interactionModel.compile(
         optimizer= adam,
         loss='mean_squared_error',
-        metrics=['mse']
+        metrics=['mse', get_cindex]
     )
     return interactionModel
-
 
 XD = []
 XT = []
