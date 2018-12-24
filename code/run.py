@@ -6,7 +6,7 @@ import os
 import random
 import keras
 import sklearn
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 from sklearn import metrics
 import re
 from keras import optimizers
@@ -15,23 +15,22 @@ from keras import regularizers
 from keras.models import model_from_json
 from keras.models import load_model
 
-
-
-
-
+# Setting up for reproducibility
 tf.set_random_seed(1); np.random.seed(1); random.seed(1)
 
 input_dir = os.path.join(os.getcwd(),'data')
 
+# Reading data from davis
 df = pd.read_csv(os.path.join(input_dir,'davis_data_python.csv'),index_col=0)
 
-kinases = df['GeneName']
-kinases = kinases.drop_duplicates()
-drugs = df['PubchemId']
-drugs = drugs.drop_duplicates()
-print(kinases.head())
-print(drugs.head())
-print([kinases.shape, drugs.shape])
+
+# kinases = df['GeneName']
+# kinases = kinases.drop_duplicates()
+# drugs = df['PubchemId']
+# drugs = drugs.drop_duplicates()
+# print(kinases.head())
+# print(drugs.head())
+# print([kinases.shape, drugs.shape])
 
 df.head()
 
@@ -53,7 +52,9 @@ dict_smiles = {"#": 29, "%": 30, ")": 31, "(": 1, "+": 32, "-": 33, "/": 34, "."
                 "l": 25, "o": 61, "n": 26, "s": 62, "r": 27, "u": 63, "t": 28, "y": 64}
 dict_smiles_len = len(dict_smiles)
 
-
+# #########
+# Encoders: one-hot and label
+# #########
 def one_hot_smiles(drug, max_smiles_len = 100, smi_dict = dict_smiles):
     X = np.zeros((max_smiles_len, len(smi_dict)))
     for i,ch in enumerate(drug[:max_smiles_len]):
@@ -76,6 +77,7 @@ def label_sequence(protein, max_prot_len = 1000, prot_dict = dict_prot):
     for i,ch in enumerate(protein[:max_prot_len]):
         X[i] = prot_dict[ch]
 
+# ##### CIndex
 def get_cindex(y_true, y_pred):
     g = tf.subtract(tf.expand_dims(y_pred, -1), y_pred)
     g = tf.cast(g == 0.0, tf.float32) * 0.5 + tf.cast(g > 0.0, tf.float32)
@@ -88,6 +90,9 @@ def get_cindex(y_true, y_pred):
 
     return tf.where(tf.equal(g, 0), 0.0, g/f)
 
+# #########
+# Building the model
+# #########
 def dtb_model(params,lr_value, windows_smiles, windows_seq):
     XDinput = keras.layers.Input(shape = (100,dict_smiles_len))
     XTinput = keras.layers.Input(shape = (1000, dict_prot_len))
@@ -124,25 +129,58 @@ def dtb_model(params,lr_value, windows_smiles, windows_seq):
     )
     return interactionModel
 
-XD = []
-XT = []
+# Cross Validation - data driven
+# We need to reorder
+def k_cross_val(XDrugs, XTarget, Ykd, fold_num, keras_model, param_dict ):
+    # get folds
+    perf_vector = []
+    kf = KFold(n_splits = fold_num)
+    for train_index, test_index in kf.split(Y):
+        XDrugs_train, XDrugs_test = XDrugs[train_index], XDrugs[test_index]
+        XTarget_train, XTarget_test = XTarget[train_index], XTarget[test_index]
+        Ykd_train, Ykd_test = Ykd[train_index], Ykd[test_index]
+        lr_value = 0.0003
+        all_scores = []
+        windows_smiles = [48]
+        windows_seq = [48]
+        for i in range(len(windows_smiles)):
+        	for j in range(len(windows_seq)):
+        		interactionModel = keras_model(p,lr_value,windows_smiles[i],windows_seq[j])
+        		tensorboard = keras.callbacks.TensorBoard(log_dir='/artifacts', histogram_freq=0,
+                  write_graph=True, write_images=True)
+        		interactionModel.fit([XDrugs_train,XTarget_train],Ykd_train, batch_size = 256 , epochs = 40, callbacks=[tensorboard])
+        		scores = interactionModel.evaluate([XDrugs_test,XTarget_test], Ykd_test, verbose=0)
+        		all_scores.append(scores[1])
+        max_score_index = all_scores.index(max(all_scores))
+        perf_vector.append([windows_smiles[max_score_index], windows_seq[max_score_index], scores[max_score_index]])
+        print(all_scores)
+    print(perf_vector)
 
-for i in range(df.shape[0]):
-	drug = one_hot_smiles(df.Isosmiles.iloc[i])
-	XD.append(drug)
-
-XD = np.array(XD)
-
-for i in range(df.shape[0]):
-	target = one_hot_sequence(df.Sequence.iloc[i])
-	XT.append(target)
-
-XT = np.array(XT)
-
-Y = np.log10(df.KD)-np.mean(np.log10(df.KD))
-Y = Y.values
 
 
+
+# Passing in the data as pairs of interactions
+def make_datasets(dataframe):
+    XD = []
+    XT = []
+
+    for i in range(dataframe.shape[0]):
+        drug = one_hot_smiles(dataframe.Isosmiles.iloc[i])
+        XD.append(drug)
+
+    XD = np.array(XD)
+
+    for i in range(dataframe.shape[0]):
+        target = one_hot_sequence(dataframe.Sequence.iloc[i])
+        XT.append(target)
+
+    XT = np.array(XT)
+
+    Y = np.log10(dataframe.KD)-np.mean(np.log10(dataframe.KD))
+    Y = Y.values
+    return(XD,XT, Y)
+
+# Dictionary of parameters
 p = {'lr': 0.001,
      'nfilters': int(32),
      'size': int(8),
@@ -152,18 +190,22 @@ p = {'lr': 0.001,
      'dropout': 0.1,
      'l2reg': 0.015}
 
+# OLA ta apokatw ta evala mesa sto k_cross_val
+# Grid model
+# lr_value = 0.0003
+# all_scores = []
+# windows_smiles = [48]
+# windows_seq = [48]
+# for i in range(len(windows_smiles)):
+# 	for j in range(len(windows_seq)):
+# 		interactionModel = dtb_model(p,lr_value,windows_smiles[i],windows_seq[j])
+# 		tensorboard = keras.callbacks.TensorBoard(log_dir='/artifacts', histogram_freq=0,
+#           write_graph=True, write_images=True)
+# 		interactionModel.fit([XD,XT],Y, batch_size = 256 , epochs = 40, callbacks=[tensorboard], validation_split = 0.1)
+# 		scores = interactionModel.evaluate([XD,XT], Y, verbose=0)
+# 		all_scores.append(scores[1])
+#
+# print(all_scores)
 
-lr_value = 0.0003
-all_scores = []
-windows_smiles = [48]
-windows_seq = [48]
-for i in range(len(windows_smiles)):
-	for j in range(len(windows_seq)):
-		interactionModel = dtb_model(p,lr_value,windows_smiles[i],windows_seq[j])
-		tensorboard = keras.callbacks.TensorBoard(log_dir='/artifacts', histogram_freq=0,
-          write_graph=True, write_images=True)
-		interactionModel.fit([XD,XT],Y, batch_size = 256 , epochs = 40, callbacks=[tensorboard], validation_split = 0.2)
-		scores = interactionModel.evaluate([XD,XT], Y, verbose=0)
-		all_scores.append(scores[1])
-
-print(all_scores)
+XD, XT, Y = make_datasets(df)
+k_cross_val(XD, XT, Y, 10, dtb_model, p )
