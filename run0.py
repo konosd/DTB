@@ -14,6 +14,7 @@ from keras import losses
 from keras import regularizers
 from keras.models import model_from_json
 from keras.models import load_model
+from tempfile import TemporaryFile
 
 # Setting up for reproducibility
 tf.set_random_seed(1); np.random.seed(1); random.seed(1)
@@ -136,9 +137,6 @@ def k_cross_val(XD, XT, Y, fold_num, keras_model, param_dict ):
     perf_vector = []
     kf = KFold(n_splits = fold_num)
     for train_index, test_index in kf.split(Y):
-        XD_train, XD_test = XD[train_index], XD[test_index]
-        XT_train, XT_test = XT[train_index], XT[test_index]
-        Y_train, Y_test = Y[train_index], Y[test_index]
         lr_value = 0.0003
         all_scores = []
         windows_smiles = [48]
@@ -148,8 +146,8 @@ def k_cross_val(XD, XT, Y, fold_num, keras_model, param_dict ):
         		interactionModel = keras_model(p,lr_value,windows_smiles[i],windows_seq[j])
         		tensorboard = keras.callbacks.TensorBoard(log_dir='/artifacts', histogram_freq=0,
                   write_graph=True, write_images=True)
-        		interactionModel.fit([XD_train,XT_train],Y_train, batch_size = 32 , epochs = 40, callbacks=[tensorboard])
-        		scores = interactionModel.evaluate([XD_test,XT_test], Y_test, verbose=0)
+        		interactionModel.fit([XD[train_index],XT[train_index]],Y[train_index], batch_size = 128 , epochs = 40, callbacks=[tensorboard])
+        		scores = interactionModel.evaluate([XD[test_index],XT[test_index]], Y[test_index], verbose=0)
         		all_scores.append(scores[1])
         max_score_index = all_scores.index(max(all_scores))
         perf_vector.append([windows_smiles[max_score_index], windows_seq[max_score_index], scores[max_score_index]])
@@ -208,9 +206,9 @@ p = {'lr': 0.001,
 #
 # print(all_scores)
 
-#XD, XT, Y = make_datasets(df)
-#k_cross_val(XD, XT, Y, 2, dtb_model, p )
+XD, XT, Y = make_datasets(df)
 
+k_cross_val(XD, XT, Y, 10, dtb_model, p)
 
 def dokimi(XD, XT, Y, fold_num ):
     # get folds
@@ -218,12 +216,8 @@ def dokimi(XD, XT, Y, fold_num ):
     kf = KFold(n_splits = fold_num)
     i = 1
     for train_index, test_index in kf.split(Y):
-        #XD_train = XD[train_index]
-        #XD_test = XD[test_index]
-        XT_train =  XT[train_index]
-        XT_test = XT[test_index]
-        #Y_train=  Y[train_index]
-        #Y_test = Y[test_index]
+        XD[train_index], XT[train_index], Y[train_index]
+
         print('{} {}'.format(len(train_index), len(test_index)))
         print('Fold {} done, with data.'.format(i))
         i += 1
